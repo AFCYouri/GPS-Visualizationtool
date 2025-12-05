@@ -1,23 +1,23 @@
 const express = require('express')
 const app = express()
 const port = 3000
-const path = require('path');
+// const path = require('path');
 
-// const csv = require('csv-parser')
-// const fs = require('fs')
-// const results = [];
+// app.get('/', function(req, res) {
+//   res.sendFile(path.join(__dirname, './'));
+// });
 
-// fs.createReadStream('/Documents/Development/myapp/data/cape_may_restaurants.csv')
-//     .pipe(csv())
-//     .on('data', (data) => results.push(data))
-//     .on('end', () => {
-//         console.log(results);
-//     });
-
-app.get('/', function(req, res) {
-  res.sendFile(path.join(__dirname, '/index.html'));
-});
+const folderToServe = __dirname;
+app.use(express.static(folderToServe));
 
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`)
 })
+
+// const http = require('http-server')
+
+// const server = http.createServer({ root: './' });
+
+// server.listen(port, () => {
+//   console.log(`Example app listening on port ${port}`)
+// });
