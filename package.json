@@ -1,0 +1,29 @@
+{
+  "name": "gps-visualizationtool",
+  "version": "1.0.0",
+  "description": "A tool to visualize and trace gps-data from vessels from CSV files",
+  "keywords": [
+    "GPS-data",
+    "CSV",
+    "Maplibre-gl-js"
+  ],
+  "homepage": "https://github.com/AFCYouri/GPS-Visualizationtool#readme",
+  "bugs": {
+    "url": "https://github.com/AFCYouri/GPS-Visualizationtool/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AFCYouri/GPS-Visualizationtool.git"
+  },
+  "license": "ISC",
+  "author": "Youri Barelds",
+  "type": "commonjs",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "maplibre-gl": "^5.15.0"
+  }
+}
