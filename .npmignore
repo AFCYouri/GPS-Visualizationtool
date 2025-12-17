@@ -1,8 +1,0 @@
-# Blacklist everything first
-*
-
-# Whitelist specific files or folders
-!dist/
-!README.md
-!LICENSE
-!package.json
