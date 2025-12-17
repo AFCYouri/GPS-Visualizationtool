@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Update a feature in realtime</title>
+    <meta property="og:description" content="Change an existing feature on your map in real-time by updating its data." />
+    <meta charset='utf-8'>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel='stylesheet' href='https://unpkg.com/maplibre-gl@5.14.0/dist/maplibre-gl.css' />
+    <script src='https://unpkg.com/maplibre-gl@5.14.0/dist/maplibre-gl.js'></script>
+    <style>
+        body { margin: 0; padding: 0; }
+        html, body, #map { height: 100%; }
+    </style>
+</head>
+<body>
+<div id="map"></div>
+
+<script src="https://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+<script>
+    const map = new maplibregl.Map({
+        container: 'map',
+        style: 'https://tiles.openfreemap.org/styles/bright',
+        zoom: 0
+    });
+
+    map.on('load', () => {
+        // We use D3 to fetch the JSON here so that we can parse and use it separately
+        // from GL JS's use in the added source. You can use any request method (library
+        // or otherwise) that you want.
+
+        //console.log(`what is my href ${window.location.href}`); 
+
+        const url = window.location.href.replace('?','');
+        console.log(`what is my href ${url}`);
+        
+        d3.csv(`${url}`, (err, csvData) => {
+            
+            if (err) throw err;
+
+            
+            console.log("[data]My data: ");
+            const data = { 
+                "type": "FeatureCollection",
+                "features": [
+                ]
+            };
+            
+            
+            let container = {};
+            for(let i = 0; i < csvData.length; i++) {
+                const row = csvData[i];
+                /// `row.time` is TIME IN UTC!
+                if(container[row.Id] === undefined) {
+
+                    container[row.Id] = {
+                                "type": "Feature",
+                                "geometry": {
+                                    "type": "LineString",
+                                    "coordinates": [],
+                                },
+                                "properties": {
+                                    "color": row.Color,
+                                }
+
+                            };
+                }
+
+                container[row.Id].geometry.coordinates.push([ row.Lon, row.Lat ]);
+            }
+
+            for(const c in container) {
+                data.features.push(container[c]);
+                const sourceId = `sourceId_${c}`;
+                const layerId = `layerId_${c}`;  
+                map.addSource(sourceId, {type: 'geojson', data: container[c]});
+                map.addLayer({
+                        'id': layerId,
+                        'type': 'line',
+                        'source': sourceId,
+                        'paint': {
+                            'line-color': container[c].properties.color,
+                            'line-opacity': 0.75,
+                            'line-width': 5
+                        }
+                    });
+
+            }
+            const idx = 1;
+              
+            
+            console.log("[data]End my data: ");
+            map.jumpTo({'center': [5.470055, 52.224193], 'zoom': 6});
+               
+              
+        });
+    });
+</script>
+</body>
+</html>
