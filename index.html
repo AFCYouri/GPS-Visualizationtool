@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html lang="en">
 <head>
     <title>Update a feature in realtime</title>
@@ -17,7 +17,7 @@
     .map-overlay {
         font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
         position: absolute;
-        width: 25%;
+        width: 50%;
         top: 0;
         left: 0;
         padding: 10px;
@@ -55,12 +55,281 @@
 <div id="map"></div>
 
 <div class="map-overlay top">
-    <div class="map-overlay-inner">
+    <div class="map-overlay-inner" id="map-overlay-inner-id">
         <h2>Timestamps coordinates</h2>
         <label id="time" for="slider"></label>
-        <input id="slider" type="range" min="0" max="" step="1" value="0" />
+        <input id="slider" type="range" min="0" max="" step="1" value="0" autocomplete="off" />
+
+        <label id="uploadButtonText">Upload CSV Files(s)</label>
+        <input type="file" id="uploadFiles" accept=".csv" multiple />
     </div>
 </div>
+
+<script src="https://d3js.org/d3.v7.min.js" charset="utf-8"></script>
+
+<script>
+    const map = new maplibregl.Map({
+        container: 'map',
+        style: 'https://tiles.openfreemap.org/styles/bright',
+        zoom: 0
+    });
+
+    function createCheckboxes(sourceId, layerId, vessel_name) {
+        const container = document.getElementById('map-overlay-inner-id');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.id = `${sourceId}_checkbox`;
+        checkbox.checked = true;
+
+        const label = document.createElement('label');
+        label.htmlFor = `${sourceId}_checkbox`;
+        label.textContent = vessel_name;
+
+        container.appendChild(checkbox);
+        container.appendChild(label);
+
+        checkbox.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                map.setLayoutProperty(layerId, 'visibility', 'visible');
+            } else {
+                map.setLayoutProperty(layerId, 'visibility', 'none');
+            }
+        });
+    }
+
+    const url = window.location.href.replace('?','');
+
+    let csvData = [];
+
+    d3.dsv(`;`, `${url}`, (rawData) => {
+        csvData.push(rawData);
+    });
+
+    map.on('load', () => {      
+
+        const data = { 
+            "type": "FeatureCollection",
+            "features": [
+            ]
+        };
+        
+        let container = {};
+        let csv_index = csvData.length;
+
+        while (csv_index--) {
+            if (csvData[csv_index].Latitude === "0N" && csvData[csv_index].Longitude === "0E") { 
+                csvData.splice(csv_index, 1);
+            }
+        }
+
+        for(let i = 0; i < csvData.length; i++) {
+            const row = csvData[i];
+
+            if(container[row.Name2] === undefined) {
+
+                container[row.Name2] = {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "LineString",
+                        "coordinates": []
+                    },
+                    "properties": {
+                        "Name": [],
+                        "Date_Time": [],
+                        "Speed": [],
+                        "Course": [],
+                        "Sats": [],
+                        "HDOP": [],
+                        "CellId": [],
+                        "LAC": row.LAC,
+                        "Name2": row.Name2,
+                        "TA": [],
+                        "PL": [],
+                        "M": [],
+                        "IntPwr": [],
+                        "ACC": [],
+                        "Temp": [],
+                        "Charging": [],
+                        "RSSI": [],
+                        "Mode": [],
+                        "CAP": [],
+                    }
+                };
+            }
+
+            // Latitude and Longitude data from CSV uses a comma (,), maplibre expects a period (.), we use the replace() function to change the comma to a period
+            // Latitude and Longitude data from CSV adds N and E at the end, with the replace() function we remove these characters
+            row.Latitude = row.Latitude.replace(/,/g, ".");
+            row.Latitude = row.Latitude.replace(/N/gi, "");
+            row.Longitude = row.Longitude.replace(/,/g, ".");
+            row.Longitude = row.Longitude.replace(/E/gi, "");
+
+            // Convert UTC_Date & UTC_Time rows to ISO8601 format (YYYY-MM-DDThh:mm:ss)
+            row['UTC Date'] = row['UTC Date'].split("-").reverse().join("-");
+
+            container[row.Name2].geometry.coordinates.push([ row.Longitude, row.Latitude ]);
+            container[row.Name2].properties.Name.push(row.Name);
+            container[row.Name2].properties.Date_Time.push(`${row['UTC Date']}T${row['UTC Time']}.000Z`);
+            container[row.Name2].properties.Speed.push(row.Speed);
+            container[row.Name2].properties.Course.push(row.Course);
+            container[row.Name2].properties.Sats.push(row.Sats);
+            container[row.Name2].properties.HDOP.push(row.HDOP);
+            container[row.Name2].properties.CellId.push(row.CellID);
+            container[row.Name2].properties.TA.push(row.TA);
+            container[row.Name2].properties.PL.push(row.PL);
+            container[row.Name2].properties.M.push(row.M);
+            container[row.Name2].properties.IntPwr.push(row.IntPwr);
+            container[row.Name2].properties.ACC.push(row.ACC);
+            container[row.Name2].properties.Temp.push(row.Temp);
+            container[row.Name2].properties.Charging.push(row.Charging);
+            container[row.Name2].properties.RSSI.push(row.RSSI);
+            container[row.Name2].properties.Mode.push(row.Mode);
+            container[row.Name2].properties.CAP.push(row.CAP);
+        }
+
+        console.log("----- Start My Data: ");
+        console.log(container);
+        console.log("----- End My Data: ");
+
+        for(const c in container) {
+            data.features.push(container[c]);
+            const sourceId = `sourceId_${c}`;
+            const layerId = `layerId_${c}`;
+
+            createCheckboxes(sourceId, layerId, container[c].properties.Name2);
+
+            const randomColor = "#000000".replace(/0/g,function() {
+                return (~~(Math.random()*16)).toString(16);
+            });
+
+            map.addSource(sourceId, {type: 'geojson', data: container[c]});
+            map.addLayer({
+                'id': layerId,
+                'type': 'line',
+                'source': sourceId,
+                'layout': {
+                    'line-cap': 'round'
+                },
+                'paint': {
+                    'line-color': randomColor,
+                    'line-opacity': 1,
+                    'line-width': 4,
+                }
+            });
+        }
+
+        document.getElementById("slider").max = data.features[0].properties.Date_Time.length - 1;
+
+        function createArrow(start, end, headLength = 0.0001, headAngle = Math.PI / 5) {
+            const dx = end[0] - start[0];
+            const dy = end[1] - start[1];
+            const angle = Math.atan2(dy, dx);
+
+            const leftX = end[0] - headLength * Math.cos(angle - headAngle);
+            const leftY = end[1] - headLength * Math.sin(angle - headAngle);
+
+            const rightX = end[0] - headLength * Math.cos(angle + headAngle);
+            const rightY = end[1] - headLength * Math.sin(angle + headAngle);
+
+            return [[leftX, leftY], [rightX, rightY]];
+        }
+
+        function filterBy(datetime_index) {
+            const filters = ['==', 'time', datetime_index];
+
+            // Set the label to the datetime value
+            let datetime = new Date(data.features[0].properties.Date_Time[datetime_index]);
+
+            document.getElementById('time').textContent = `${datetime.toUTCString()}`;
+            const index = data.features[0].properties.Date_Time.findIndex((b) => b === data.features[0].properties.Date_Time[datetime_index]);
+
+            for (let i = 0; i < data.features.length; i++) {
+
+                const checkboxValue = document.getElementById(`sourceId_${data.features[0].properties.Name2}_checkbox`).checked;
+                const coordinatesArray = data.features[i].geometry.coordinates;
+                const arrowHeadLines = createArrow(coordinatesArray[index], coordinatesArray[index + 1]);
+
+                if (checkboxValue) {
+                    map.getSource(`sourceId_${data.features[0].properties.Name2}`).setData({
+                        "type": "FeatureCollection",
+                        "features": [
+                            {
+                                "type": "Feature",
+                                "geometry": {
+                                    "type": "LineString",
+                                    "coordinates": [
+                                        coordinatesArray[index],
+                                        coordinatesArray[index + 1],
+                                    ]
+                                }
+                            },
+                            {
+                                "type": "Feature",
+                                "geometry": {
+                                    "type": "LineString",
+                                    "coordinates": [
+                                        coordinatesArray[index + 1],
+                                        arrowHeadLines[0]
+                                    ]
+                                }
+                            },
+                            {
+                                "type": "Feature",
+                                "geometry": {
+                                    "type": "LineString",
+                                    "coordinates": [
+                                        coordinatesArray[index + 1],
+                                        arrowHeadLines[1]
+                                    ]
+                                }
+                            },
+                        ]
+                    });
+                }
+            }
+        }
+
+        filterBy(0);
+
+        document
+            .getElementById('slider')
+            .addEventListener('input', (e) => {
+                const timestamp = parseInt(e.target.value, 10);
+                filterBy(timestamp);
+            });
+        
+        map.jumpTo({'center': data.features[0].geometry.coordinates[0], 'zoom': 14});
+    });
+</script>
+</body>
+</html> -->
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+<title>Update a feature in realtime</title>
+    
+<meta property="og:description" content="Change an existing feature on your map in real-time by updating its data." />
+    
+<meta charset='utf-8'>
+    
+<meta name="viewport" content="width=device-width, initial-scale=1">
+    
+<link rel='stylesheet' href='https://unpkg.com/maplibre-gl@5.16.0/dist/maplibre-gl.css' />
+    
+<script src='https://unpkg.com/maplibre-gl@5.16.0/dist/maplibre-gl.js'></script>
+    
+<style>
+        body { margin: 0; padding: 0; }
+        html, body, #map { height: 100%; }
+    </style>
+</head>
+<body>
+<div id="map"></div>
 
 <script src="https://d3js.org/d3.v3.min.js" charset="utf-8"></script>
 <script>
@@ -74,100 +343,50 @@
         // We use D3 to fetch the JSON here so that we can parse and use it separately
         // from GL JS's use in the added source. You can use any request method (library
         // or otherwise) that you want.
+        d3.json(
+            'https://maplibre.org/maplibre-gl-js/docs/assets/hike.geojson',
+            (err, data) => {
+                if (err) throw err;
 
-        //console.log(`what is my href ${window.location.href}`); 
+                // save full coordinate list for later
+                const coordinates = data.features[0].geometry.coordinates;
 
-        const url = window.location.href.replace('?','');
-        console.log(`what is my href ${url}`);
-        
-        d3.csv(`${url}`, (err, csvData) => {
-            
-            if (err) throw err;
-            
-            console.log("[data]My data: ");
-            const data = { 
-                "type": "FeatureCollection",
-                "features": [
-                ]
-            };
-            
-            let container = {};
-            for(let i = 0; i < csvData.length; i++) {
-                const row = csvData[i];
-                /// `row.time` is TIME IN UTC!
-                if(container[row.id] === undefined) {
+                // start by showing just the first coordinate
+                data.features[0].geometry.coordinates = [coordinates[0]];
 
-                    container[row.id] = {
-                        "type": "Feature",
-                        "geometry": {
-                            "type": "LineString",
-                            "coordinates": []
-                        },
-                        "properties": {
-                            "color": row.color,
-                            "date_time": []
-                        }
-                    };
-                }
-
-                container[row.id].geometry.coordinates.push([ row.lon, row.lat ]);
-                container[row.id].properties.date_time.push(row.date_time);
-            }
-
-            console.log("data start: ");
-            console.log(data);
-            console.log("data end");
-
-            for(const c in container) {
-                data.features.push(container[c]);
-                const sourceId = `sourceId_${c}`;
-                const layerId = `layerId_${c}`;  
-                map.addSource(sourceId, {type: 'geojson', data: container[c]});
+                // add it to the map
+                map.addSource('trace_test', {type: 'geojson', data});
                 map.addLayer({
-                    'id': layerId,
+                    'id': 'trace',
                     'type': 'line',
-                    'source': sourceId,
+                    'source': 'trace_test',
                     'paint': {
-                        'line-color': container[c].properties.color,
+                        'line-color': 'yellow',
                         'line-opacity': 0.75,
                         'line-width': 5
                     }
                 });
+
+                // setup the viewport
+                map.jumpTo({'center': coordinates[0], 'zoom': 14});
+                map.setPitch(30);
+
+                // on a regular basis, add more coordinates from the saved list and update the map
+                let i = 0;
+                const timer = window.setInterval(() => {
+                    if (i < coordinates.length) {
+                        data.features[0].geometry.coordinates.push(
+                            coordinates[i]
+                        );
+                        map.getSource('trace_test').setData(data);
+                        map.panTo(coordinates[i]);
+                        i++;
+                    } else {
+                        window.clearInterval(timer);
+                    }
+                }, 10);
             }
-
-            const timestamps = [];
-
-            for (const dt in data.features[0].properties.date_time) {
-                timestamps.push(data.features[0].properties.date_time[dt]);
-            }
-
-            document.getElementById("slider").max = timestamps.length - 1;
-
-            console.log("[data start] Timestamps: ");
-            console.log(timestamps);
-            console.log("[data end] Timestamps");
-
-            function filterBy(timestamp) {
-                const filters = ['==', 'time', timestamp];
-
-                // Set the label to the month
-                document.getElementById('time').textContent = timestamps[timestamp];
-
-                console.log(`Filtering by time: ${timestamps[timestamp]}`);
-            }
-
-            filterBy(0);
-
-            document
-                .getElementById('slider')
-                .addEventListener('input', (e) => {
-                    const timestamp = parseInt(e.target.value, 10);
-                    filterBy(timestamp);
-                });
-            
-            console.log("[data]End my data: ");
-            map.jumpTo({'center': [4.788589, 52.964203], 'zoom': 14});
-        });
+        );
     });
 </script>
 </body>
