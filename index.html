@@ -100,6 +100,12 @@
 
     let csvData = [];
 
+    const data = { 
+        "type": "FeatureCollection",
+        "features": [
+        ]
+    };
+
     uploadFiles.addEventListener('change', async (event) => {
         
         const files = event.target.files;
@@ -205,25 +211,90 @@
             });
             createCheckboxes(sourceId, layerId, name2);
         }
-        filterby(0);
+        const length = Math.max(...data.features.map(f => f.properties.Date_Time.length));
+        document.getElementById("slider").max = length - 1; // -1 to avoid arrow head issue
+        filterBy(0);
     });
 
     const url = window.location.href.replace('?','');
-
-    
 
     d3.dsv(`;`, `${url}`, (rawData) => {
         csvData.push(rawData);
     });
 
+    function createArrow(start, end, headLength = 0.0001, headAngle = Math.PI / 5) {
+        const dx = end[0] - start[0];
+        const dy = end[1] - start[1];
+        const angle = Math.atan2(dy, dx);
+
+        const leftX = end[0] - headLength * Math.cos(angle - headAngle);
+        const leftY = end[1] - headLength * Math.sin(angle - headAngle);
+
+        const rightX = end[0] - headLength * Math.cos(angle + headAngle);
+        const rightY = end[1] - headLength * Math.sin(angle + headAngle);
+
+        return [[leftX, leftY], [rightX, rightY]];
+    }
+
+    function filterBy(datetime_index) {
+        const filters = ['==', 'time', datetime_index];
+
+        // Set the label to the datetime value
+        let datetime = new Date(data.features[0].properties.Date_Time[datetime_index]);
+
+        document.getElementById('time').textContent = `${datetime.toUTCString()}`;
+        const index = data.features[0].properties.Date_Time.findIndex((b) => b === data.features[0].properties.Date_Time[datetime_index]);
+
+        for (let i = 0; i < data.features.length; i++) {
+
+            const checkboxValue = document.getElementById(`sourceId_${data.features[i].properties.Name2}_checkbox`).checked;
+
+            if (!checkboxValue) {
+                continue;
+            }
+
+            const coordinatesArray = data.features[i].geometry.coordinates;
+            const arrowHeadLines = createArrow(coordinatesArray[index], coordinatesArray[index + 1]);
+            map.getSource(`sourceId_${data.features[i].properties.Name2}`).setData({
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "geometry": {
+                            "type": "LineString",
+                            "coordinates": [
+                                coordinatesArray[index],
+                                coordinatesArray[index + 1],
+                            ]
+                        }
+                    },
+                    {
+                        "type": "Feature",
+                        "geometry": {
+                            "type": "LineString",
+                            "coordinates": [
+                                coordinatesArray[index + 1],
+                                arrowHeadLines[0]
+                            ]
+                        }
+                    },
+                    {
+                        "type": "Feature",
+                        "geometry": {
+                            "type": "LineString",
+                            "coordinates": [
+                                coordinatesArray[index + 1],
+                                arrowHeadLines[1]
+                            ]
+                        }
+                    },
+                ]
+            });
+        }
+    }
+
     map.on('load', () => {      
 
-        const data = { 
-            "type": "FeatureCollection",
-            "features": [
-            ]
-        };
-        
         let container = {};
         let csv_index = csvData.length;
 
@@ -331,77 +402,6 @@
 
         document.getElementById("slider").max = data.features[0].properties.Date_Time.length - 1;
 
-        function createArrow(start, end, headLength = 0.0001, headAngle = Math.PI / 5) {
-            const dx = end[0] - start[0];
-            const dy = end[1] - start[1];
-            const angle = Math.atan2(dy, dx);
-
-            const leftX = end[0] - headLength * Math.cos(angle - headAngle);
-            const leftY = end[1] - headLength * Math.sin(angle - headAngle);
-
-            const rightX = end[0] - headLength * Math.cos(angle + headAngle);
-            const rightY = end[1] - headLength * Math.sin(angle + headAngle);
-
-            return [[leftX, leftY], [rightX, rightY]];
-        }
-
-        function filterBy(datetime_index) {
-            const filters = ['==', 'time', datetime_index];
-
-            // Set the label to the datetime value
-            let datetime = new Date(data.features[0].properties.Date_Time[datetime_index]);
-
-            document.getElementById('time').textContent = `${datetime.toUTCString()}`;
-            const index = data.features[0].properties.Date_Time.findIndex((b) => b === data.features[0].properties.Date_Time[datetime_index]);
-
-            for (let i = 0; i < data.features.length; i++) {
-
-                const checkboxValue = document.getElementById(`sourceId_${data.features[0].properties.Name2}_checkbox`).checked;
-
-                if (!checkboxValue) {
-                    continue;
-                }
-
-                const coordinatesArray = data.features[i].geometry.coordinates;
-                const arrowHeadLines = createArrow(coordinatesArray[index], coordinatesArray[index + 1]);
-                map.getSource(`sourceId_${data.features[i].properties.Name2}`).setData({
-                    "type": "FeatureCollection",
-                    "features": [
-                        {
-                            "type": "Feature",
-                            "geometry": {
-                                "type": "LineString",
-                                "coordinates": [
-                                    coordinatesArray[index],
-                                    coordinatesArray[index + 1],
-                                ]
-                            }
-                        },
-                        {
-                            "type": "Feature",
-                            "geometry": {
-                                "type": "LineString",
-                                "coordinates": [
-                                    coordinatesArray[index + 1],
-                                    arrowHeadLines[0]
-                                ]
-                            }
-                        },
-                        {
-                            "type": "Feature",
-                            "geometry": {
-                                "type": "LineString",
-                                "coordinates": [
-                                    coordinatesArray[index + 1],
-                                    arrowHeadLines[1]
-                                ]
-                            }
-                        },
-                    ]
-                });
-            }
-        }
-
         filterBy(0);
 
         const slider = document.getElementById('slider');
@@ -446,10 +446,6 @@
 
         document.getElementById('play_pause_button').addEventListener('click', togglePlayPause);
 
-        // const stopAnimation = sliderAnimation(slider, 7000, 500);
-
-
-
         slider
             .addEventListener('input', (e) => {
                 const timestamp = parseInt(e.target.value, 10);
@@ -458,9 +454,6 @@
                 filterBy(timestamp);
                 // sliderAnimation(timestamp);
             });
-
-            
-
 
         map.jumpTo({'center': data.features[0].geometry.coordinates[0], 'zoom': 14});
     });
