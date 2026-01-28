@@ -59,6 +59,7 @@
         <h2>Timestamps coordinates</h2>
         <label id="time" for="slider"></label>
         <input id="slider" type="range" min="0" max="" step="1" value="0" autocomplete="off" />
+        <button id="play_pause_button">Play Animation</button>
 
         <label id="uploadButtonText">Upload CSV Files(s)</label>
         <input type="file" id="uploadFiles" accept=".csv" multiple />
@@ -97,9 +98,119 @@
         });
     }
 
+    let csvData = [];
+
+    uploadFiles.addEventListener('change', async (event) => {
+        
+        const files = event.target.files;
+        
+        console.log("----- Selected files: ");
+        console.log(files[0]);
+        
+        for (const file of files) {
+            const text = await file.text();
+            const entries = d3.dsvFormat(`;`).parse(text);
+            const validEntries = entries.filter(entry => entry.Latitude !== "0N" && entry.Longitude !== "0E");
+
+            if (validEntries.length === 0) {
+                console.log(`----- No valid data in file: ${file.name}`);
+                continue;
+            }
+
+            const name2 = validEntries[0].Name2 || file.name.replace('.csv', '');
+            
+            const feature = { 
+                "type": "Feature",
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": []
+                },
+                "properties": {
+                    "Name": [],
+                    "Date_Time": [],
+                    "Speed": [],
+                    "Course": [],
+                    "Sats": [],
+                    "HDOP": [],
+                    "CellId": [],
+                    "LAC": validEntries[0].LAC,
+                    "Name2": name2,
+                    "TA": [],
+                    "PL": [],
+                    "M": [],
+                    "IntPwr": [],
+                    "ACC": [],
+                    "Temp": [],
+                    "Charging": [],
+                    "RSSI": [],
+                    "Mode": [],
+                    "CAP": [],
+                }
+            };
+            
+            for (const row of validEntries) {
+                // Latitude and Longitude data from CSV uses a comma (,), maplibre expects a period (.), we use the replace() function to change the comma to a period
+                // Latitude and Longitude data from CSV adds N and E at the end, with the replace() function we remove these characters
+                row.Latitude = row.Latitude.replace(/,/g, ".");
+                row.Latitude = row.Latitude.replace(/N/gi, "");
+                row.Longitude = row.Longitude.replace(/,/g, ".");
+                row.Longitude = row.Longitude.replace(/E/gi, "");
+
+                // Convert UTC_Date & UTC_Time rows to ISO8601 format (YYYY-MM-DDThh:mm:ss)
+                row['UTC Date'] = row['UTC Date'].split("-").reverse().join("-");
+
+                feature.geometry.coordinates.push([ row.Longitude, row.Latitude ]);
+                feature.properties.Name.push(row.Name);
+                feature.properties.Date_Time.push(`${row['UTC Date']}T${row['UTC Time']}.000Z`);
+                feature.properties.Speed.push(row.Speed);
+                feature.properties.Course.push(row.Course);
+                feature.properties.Sats.push(row.Sats);
+                feature.properties.HDOP.push(row.HDOP);
+                feature.properties.CellId.push(row.CellID);
+                feature.properties.TA.push(row.TA);
+                feature.properties.PL.push(row.PL);
+                feature.properties.M.push(row.M);
+                feature.properties.IntPwr.push(row.IntPwr);
+                feature.properties.ACC.push(row.ACC);
+                feature.properties.Temp.push(row.Temp);
+                feature.properties.Charging.push(row.Charging);
+                feature.properties.RSSI.push(row.RSSI);
+                feature.properties.Mode.push(row.Mode);
+                feature.properties.CAP.push(row.CAP);
+
+                console.log("----- Processed row: ", feature);
+            }
+
+            const randomColor = "#000000".replace(/0/g,function() {
+                return (~~(Math.random()*16)).toString(16);
+            });
+
+            data.features.push(feature);
+            const sourceId = `sourceId_${name2}`;
+            const layerId = `layerId_${name2}`;
+            // to do create color picker
+            map.addSource(sourceId, {type: 'geojson', data: feature});
+            map.addLayer({
+                'id': layerId,
+                'type': 'line',
+                'source': sourceId,
+                'layout': {
+                    'line-cap': 'round'
+                },
+                'paint': {
+                    'line-color': randomColor,
+                    'line-opacity': 1,
+                    'line-width': 4,
+                }
+            });
+            createCheckboxes(sourceId, layerId, name2);
+        }
+        filterby(0);
+    });
+
     const url = window.location.href.replace('?','');
 
-    let csvData = [];
+    
 
     d3.dsv(`;`, `${url}`, (rawData) => {
         csvData.push(rawData);
@@ -246,58 +357,111 @@
             for (let i = 0; i < data.features.length; i++) {
 
                 const checkboxValue = document.getElementById(`sourceId_${data.features[0].properties.Name2}_checkbox`).checked;
+
+                if (!checkboxValue) {
+                    continue;
+                }
+
                 const coordinatesArray = data.features[i].geometry.coordinates;
                 const arrowHeadLines = createArrow(coordinatesArray[index], coordinatesArray[index + 1]);
-
-                if (checkboxValue) {
-                    map.getSource(`sourceId_${data.features[0].properties.Name2}`).setData({
-                        "type": "FeatureCollection",
-                        "features": [
-                            {
-                                "type": "Feature",
-                                "geometry": {
-                                    "type": "LineString",
-                                    "coordinates": [
-                                        coordinatesArray[index],
-                                        coordinatesArray[index + 1],
-                                    ]
-                                }
-                            },
-                            {
-                                "type": "Feature",
-                                "geometry": {
-                                    "type": "LineString",
-                                    "coordinates": [
-                                        coordinatesArray[index + 1],
-                                        arrowHeadLines[0]
-                                    ]
-                                }
-                            },
-                            {
-                                "type": "Feature",
-                                "geometry": {
-                                    "type": "LineString",
-                                    "coordinates": [
-                                        coordinatesArray[index + 1],
-                                        arrowHeadLines[1]
-                                    ]
-                                }
-                            },
-                        ]
-                    });
-                }
+                map.getSource(`sourceId_${data.features[i].properties.Name2}`).setData({
+                    "type": "FeatureCollection",
+                    "features": [
+                        {
+                            "type": "Feature",
+                            "geometry": {
+                                "type": "LineString",
+                                "coordinates": [
+                                    coordinatesArray[index],
+                                    coordinatesArray[index + 1],
+                                ]
+                            }
+                        },
+                        {
+                            "type": "Feature",
+                            "geometry": {
+                                "type": "LineString",
+                                "coordinates": [
+                                    coordinatesArray[index + 1],
+                                    arrowHeadLines[0]
+                                ]
+                            }
+                        },
+                        {
+                            "type": "Feature",
+                            "geometry": {
+                                "type": "LineString",
+                                "coordinates": [
+                                    coordinatesArray[index + 1],
+                                    arrowHeadLines[1]
+                                ]
+                            }
+                        },
+                    ]
+                });
             }
         }
 
         filterBy(0);
 
-        document
-            .getElementById('slider')
+        const slider = document.getElementById('slider');
+        let current = 0;
+        let timer = null;
+        let isPlaying = false;
+
+        function sliderAnimation(slider, maxIndex, interval) {
+            if (isPlaying) {
+                return;
+            }
+            isPlaying = true;
+
+            timer = window.setInterval(() => {
+                slider.value = current;
+                slider.dispatchEvent(new Event('input'));
+                current++;
+                if (current > maxIndex) {
+                    pause();
+                    current = 0;
+                }
+            }, interval);
+
+            return timer;
+        }
+
+        function pause() {
+            window.clearInterval(timer);
+            isPlaying = false;
+        }
+
+        function togglePlayPause() {
+            const button = document.getElementById('play_pause_button');
+            if (isPlaying) {
+                pause();
+                button.textContent = "Play Animation";
+            } else {
+                stopAnimation = sliderAnimation(slider, parseInt(slider.max, 10), 500);
+                button.textContent = "Pause Animation";
+            }
+        }
+
+        document.getElementById('play_pause_button').addEventListener('click', togglePlayPause);
+
+        // const stopAnimation = sliderAnimation(slider, 7000, 500);
+
+
+
+        slider
             .addEventListener('input', (e) => {
                 const timestamp = parseInt(e.target.value, 10);
+                // console.log("Slider timestamp: " + e.target.value);
+
                 filterBy(timestamp);
+                // sliderAnimation(timestamp);
             });
-        
+
+            
+
+
         map.jumpTo({'center': data.features[0].geometry.coordinates[0], 'zoom': 14});
     });
 </script>
