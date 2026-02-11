@@ -43,28 +43,33 @@
         background: linear-gradient(to right, #fca107, #7f3121);
     }
 
-    .map-overlay input {
+    .map-overlay input [type="range"] {
         background-color: transparent;
-        display: inline-block;
         width: 100%;
-        position: relative;
-        margin: 0;
         cursor: ew-resize;
     }
 </style>
 <div id="map"></div>
-
+<!-- border rounded-lg bg-gray-50 -->
 <div class="map-overlay top">
-    <div class="flex items-center gap-4 p-3 border rounded-lg bg-gray-50 map-overlay-inner" id="map-overlay-inner-id" >
-        <h2>Timestamps coordinates</h2>
-        <label id="time" for="slider"></label>
-        <input id="slider" type="range" min="0" max="" step="1" value="0" autocomplete="off" />
-        <button id="play_pause_button">Play Animation</button>
+  <div id="map-overlay-inner-id" class="map-overlay-inner flex flex-row gap-3 p-4 border rounded-lg bg-gray-50">
+    <h2 class="text-lg font-bold">Timestamps & Coordinates</h2>
 
-        <label id="uploadButtonText">Upload CSV Files(s)</label>
-        <input type="file" id="uploadFiles" accept=".csv" autocomplete="off" multiple />
-    </div>
-    <div id="vessel_controls" class="space-y-2 mt-4"></div>
+    <label id="time" for="slider" class="text-center block w-full text-sm font-medium text-gray-700"></label>
+
+    <input id="slider" type="range" min="0" max="" step="1" value="0" class="w-full cursor-pointer" autocomplete="off"/>
+
+    <button id="play_pause_button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded shadow">
+      Play Animation
+    </button>
+
+    <label for="uploadFiles" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded shadow cursor-pointer">
+      Upload CSV File(s)
+    </label>
+    <input type="file" id="uploadFiles" accept=".csv" multiple class="hidden" />
+  </div>
+
+  <div id="vessel_controls" class="space-y-2 mt-4"></div>
 </div>
 
 <script src="https://d3js.org/d3.v7.min.js" charset="utf-8"></script>
@@ -291,6 +296,15 @@
 
                 const coordinatesArray = data.features[i].geometry.coordinates;
                 const arrowHeadLines = createArrow(coordinatesArray[index], coordinatesArray[index + 1]);
+
+                if (index >= coordinatesArray.length - 1) {
+                    return;
+                }
+
+                const totalSegments = 10;
+                const startIndex = Math.max(0, index - totalSegments);
+                const segmentCoordinates = coordinatesArray.slice(startIndex, index + 1);
+
                 map.getSource(`sourceId_${data.features[i].properties.Name2}`).setData({
                     "type": "FeatureCollection",
                     "features": [
@@ -298,10 +312,8 @@
                             "type": "Feature",
                             "geometry": {
                                 "type": "LineString",
-                                "coordinates": [
-                                    coordinatesArray[index],
-                                    // coordinatesArray[index + 1],
-                                ]
+                                "coordinates":
+                                    segmentCoordinates,
                             }
                         },
                         {
