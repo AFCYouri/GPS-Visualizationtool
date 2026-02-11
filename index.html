@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>Update a feature in realtime</title>
-    <meta property="og:description" content="Change an existing feature on your map in real-time by updating its data." />
+    <title>Visualize Vessel GPS Data</title>
+    <meta property="og:description" content="A tool to visualize vessel GPS data on a map." />
     <meta charset='utf-8'>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel='stylesheet' href='https://unpkg.com/maplibre-gl@5.14.0/dist/maplibre-gl.css' />
@@ -62,7 +62,7 @@
         <button id="play_pause_button">Play Animation</button>
 
         <label id="uploadButtonText">Upload CSV Files(s)</label>
-        <input type="file" id="uploadFiles" accept=".csv" multiple />
+        <input type="file" id="uploadFiles" accept=".csv" autocomplete="off" multiple />
     </div>
 </div>
 
@@ -98,6 +98,20 @@
         });
     }
 
+    function createColorPicker(sourceId, layerId) {
+        const container = document.getElementById('map-overlay-inner-id');
+        const colorPicker = document.createElement('input');
+        colorPicker.type = 'color';
+        colorPicker.id = `${sourceId}_colorpicker`;
+        colorPicker.value = "#000000";
+
+        container.appendChild(colorPicker);
+
+        colorPicker.addEventListener('change', (e) => {
+            map.setPaintProperty(layerId, 'line-color', e.target.value);
+        });
+    }
+
     let csvData = [];
 
     const data = { 
@@ -106,210 +120,25 @@
         ]
     };
 
-    uploadFiles.addEventListener('change', async (event) => {
+    map.on('load', () => {
         
-        const files = event.target.files;
-        
-        console.log("----- Selected files: ");
-        console.log(files[0]);
-        
-        for (const file of files) {
-            const text = await file.text();
-            const entries = d3.dsvFormat(`;`).parse(text);
-            const validEntries = entries.filter(entry => entry.Latitude !== "0N" && entry.Longitude !== "0E");
-
-            if (validEntries.length === 0) {
-                console.log(`----- No valid data in file: ${file.name}`);
-                continue;
-            }
-
-            const name2 = validEntries[0].Name2 || file.name.replace('.csv', '');
+        uploadFiles.addEventListener('change', async (event) => {
             
-            const feature = { 
-                "type": "Feature",
-                "geometry": {
-                    "type": "LineString",
-                    "coordinates": []
-                },
-                "properties": {
-                    "Name": [],
-                    "Date_Time": [],
-                    "Speed": [],
-                    "Course": [],
-                    "Sats": [],
-                    "HDOP": [],
-                    "CellId": [],
-                    "LAC": validEntries[0].LAC,
-                    "Name2": name2,
-                    "TA": [],
-                    "PL": [],
-                    "M": [],
-                    "IntPwr": [],
-                    "ACC": [],
-                    "Temp": [],
-                    "Charging": [],
-                    "RSSI": [],
-                    "Mode": [],
-                    "CAP": [],
-                }
-            };
+            const files = event.target.files;
             
-            for (const row of validEntries) {
-                // Latitude and Longitude data from CSV uses a comma (,), maplibre expects a period (.), we use the replace() function to change the comma to a period
-                // Latitude and Longitude data from CSV adds N and E at the end, with the replace() function we remove these characters
-                row.Latitude = row.Latitude.replace(/,/g, ".");
-                row.Latitude = row.Latitude.replace(/N/gi, "");
-                row.Longitude = row.Longitude.replace(/,/g, ".");
-                row.Longitude = row.Longitude.replace(/E/gi, "");
+            for (const file of files) {
+                const text = await file.text();
+                const entries = d3.dsvFormat(`;`).parse(text);
+                const validEntries = entries.filter(entry => entry.Latitude !== "0N" && entry.Longitude !== "0E");
 
-                // Convert UTC_Date & UTC_Time rows to ISO8601 format (YYYY-MM-DDThh:mm:ss)
-                row['UTC Date'] = row['UTC Date'].split("-").reverse().join("-");
-
-                feature.geometry.coordinates.push([ row.Longitude, row.Latitude ]);
-                feature.properties.Name.push(row.Name);
-                feature.properties.Date_Time.push(`${row['UTC Date']}T${row['UTC Time']}.000Z`);
-                feature.properties.Speed.push(row.Speed);
-                feature.properties.Course.push(row.Course);
-                feature.properties.Sats.push(row.Sats);
-                feature.properties.HDOP.push(row.HDOP);
-                feature.properties.CellId.push(row.CellID);
-                feature.properties.TA.push(row.TA);
-                feature.properties.PL.push(row.PL);
-                feature.properties.M.push(row.M);
-                feature.properties.IntPwr.push(row.IntPwr);
-                feature.properties.ACC.push(row.ACC);
-                feature.properties.Temp.push(row.Temp);
-                feature.properties.Charging.push(row.Charging);
-                feature.properties.RSSI.push(row.RSSI);
-                feature.properties.Mode.push(row.Mode);
-                feature.properties.CAP.push(row.CAP);
-
-                console.log("----- Processed row: ", feature);
-            }
-
-            const randomColor = "#000000".replace(/0/g,function() {
-                return (~~(Math.random()*16)).toString(16);
-            });
-
-            data.features.push(feature);
-            const sourceId = `sourceId_${name2}`;
-            const layerId = `layerId_${name2}`;
-            // to do create color picker
-            map.addSource(sourceId, {type: 'geojson', data: feature});
-            map.addLayer({
-                'id': layerId,
-                'type': 'line',
-                'source': sourceId,
-                'layout': {
-                    'line-cap': 'round'
-                },
-                'paint': {
-                    'line-color': randomColor,
-                    'line-opacity': 1,
-                    'line-width': 4,
+                if (validEntries.length === 0) {
+                    console.log(`----- No valid data in file: ${file.name}`);
+                    continue;
                 }
-            });
-            createCheckboxes(sourceId, layerId, name2);
-        }
-        const length = Math.max(...data.features.map(f => f.properties.Date_Time.length));
-        document.getElementById("slider").max = length - 1; // -1 to avoid arrow head issue
-        filterBy(0);
-    });
 
-    const url = window.location.href.replace('?','');
-
-    d3.dsv(`;`, `${url}`, (rawData) => {
-        csvData.push(rawData);
-    });
-
-    function createArrow(start, end, headLength = 0.0001, headAngle = Math.PI / 5) {
-        const dx = end[0] - start[0];
-        const dy = end[1] - start[1];
-        const angle = Math.atan2(dy, dx);
-
-        const leftX = end[0] - headLength * Math.cos(angle - headAngle);
-        const leftY = end[1] - headLength * Math.sin(angle - headAngle);
-
-        const rightX = end[0] - headLength * Math.cos(angle + headAngle);
-        const rightY = end[1] - headLength * Math.sin(angle + headAngle);
-
-        return [[leftX, leftY], [rightX, rightY]];
-    }
-
-    function filterBy(datetime_index) {
-        const filters = ['==', 'time', datetime_index];
-
-        // Set the label to the datetime value
-        let datetime = new Date(data.features[0].properties.Date_Time[datetime_index]);
-
-        document.getElementById('time').textContent = `${datetime.toUTCString()}`;
-        const index = data.features[0].properties.Date_Time.findIndex((b) => b === data.features[0].properties.Date_Time[datetime_index]);
-
-        for (let i = 0; i < data.features.length; i++) {
-
-            const checkboxValue = document.getElementById(`sourceId_${data.features[i].properties.Name2}_checkbox`).checked;
-
-            if (!checkboxValue) {
-                continue;
-            }
-
-            const coordinatesArray = data.features[i].geometry.coordinates;
-            const arrowHeadLines = createArrow(coordinatesArray[index], coordinatesArray[index + 1]);
-            map.getSource(`sourceId_${data.features[i].properties.Name2}`).setData({
-                "type": "FeatureCollection",
-                "features": [
-                    {
-                        "type": "Feature",
-                        "geometry": {
-                            "type": "LineString",
-                            "coordinates": [
-                                coordinatesArray[index],
-                                coordinatesArray[index + 1],
-                            ]
-                        }
-                    },
-                    {
-                        "type": "Feature",
-                        "geometry": {
-                            "type": "LineString",
-                            "coordinates": [
-                                coordinatesArray[index + 1],
-                                arrowHeadLines[0]
-                            ]
-                        }
-                    },
-                    {
-                        "type": "Feature",
-                        "geometry": {
-                            "type": "LineString",
-                            "coordinates": [
-                                coordinatesArray[index + 1],
-                                arrowHeadLines[1]
-                            ]
-                        }
-                    },
-                ]
-            });
-        }
-    }
-
-    map.on('load', () => {      
-
-        let container = {};
-        let csv_index = csvData.length;
-
-        while (csv_index--) {
-            if (csvData[csv_index].Latitude === "0N" && csvData[csv_index].Longitude === "0E") { 
-                csvData.splice(csv_index, 1);
-            }
-        }
-
-        for(let i = 0; i < csvData.length; i++) {
-            const row = csvData[i];
-
-            if(container[row.Name2] === undefined) {
-
-                container[row.Name2] = {
+                const name2 = validEntries[0].Name2 || file.name.replace('.csv', '');
+                
+                const feature = { 
                     "type": "Feature",
                     "geometry": {
                         "type": "LineString",
@@ -323,8 +152,8 @@
                         "Sats": [],
                         "HDOP": [],
                         "CellId": [],
-                        "LAC": row.LAC,
-                        "Name2": row.Name2,
+                        "LAC": validEntries[0].LAC,
+                        "Name2": name2,
                         "TA": [],
                         "PL": [],
                         "M": [],
@@ -337,74 +166,139 @@
                         "CAP": [],
                     }
                 };
+                
+                for (const row of validEntries) {
+                    // Latitude and Longitude data from CSV uses a comma (,), maplibre expects a period (.), we use the replace() function to change the comma to a period
+                    // Latitude and Longitude data from CSV adds N and E at the end, with the replace() function we remove these characters
+                    row.Latitude = row.Latitude.replace(/,/g, ".");
+                    row.Latitude = row.Latitude.replace(/N/gi, "");
+                    row.Longitude = row.Longitude.replace(/,/g, ".");
+                    row.Longitude = row.Longitude.replace(/E/gi, "");
+
+                    // Convert UTC_Date & UTC_Time rows to ISO8601 format (YYYY-MM-DDThh:mm:ss)
+                    row['UTC Date'] = row['UTC Date'].split("-").reverse().join("-");
+
+                    feature.geometry.coordinates.push([ row.Longitude, row.Latitude ]);
+                    feature.properties.Name.push(row.Name);
+                    feature.properties.Date_Time.push(`${row['UTC Date']}T${row['UTC Time']}.000Z`);
+                    feature.properties.Speed.push(row.Speed);
+                    feature.properties.Course.push(row.Course);
+                    feature.properties.Sats.push(row.Sats);
+                    feature.properties.HDOP.push(row.HDOP);
+                    feature.properties.CellId.push(row.CellID);
+                    feature.properties.TA.push(row.TA);
+                    feature.properties.PL.push(row.PL);
+                    feature.properties.M.push(row.M);
+                    feature.properties.IntPwr.push(row.IntPwr);
+                    feature.properties.ACC.push(row.ACC);
+                    feature.properties.Temp.push(row.Temp);
+                    feature.properties.Charging.push(row.Charging);
+                    feature.properties.RSSI.push(row.RSSI);
+                    feature.properties.Mode.push(row.Mode);
+                    feature.properties.CAP.push(row.CAP);
+                }
+
+                data.features.push(feature);
+
+                const sourceId = `sourceId_${name2}`;
+                const layerId = `layerId_${name2}`;
+
+                map.addSource(sourceId, {type: 'geojson', data: feature});
+                map.addLayer({
+                    'id': layerId,
+                    'type': 'line',
+                    'source': sourceId,
+                    'layout': {
+                        'line-cap': 'round'
+                    },
+                    'paint': {
+                        'line-opacity': 1,
+                        'line-width': 4,
+                    }
+                });
+                createCheckboxes(sourceId, layerId, name2);
+                createColorPicker(sourceId, layerId);
             }
 
-            // Latitude and Longitude data from CSV uses a comma (,), maplibre expects a period (.), we use the replace() function to change the comma to a period
-            // Latitude and Longitude data from CSV adds N and E at the end, with the replace() function we remove these characters
-            row.Latitude = row.Latitude.replace(/,/g, ".");
-            row.Latitude = row.Latitude.replace(/N/gi, "");
-            row.Longitude = row.Longitude.replace(/,/g, ".");
-            row.Longitude = row.Longitude.replace(/E/gi, "");
+            map.jumpTo({'center': data.features[0].geometry.coordinates[0], 'zoom': 16});
 
-            // Convert UTC_Date & UTC_Time rows to ISO8601 format (YYYY-MM-DDThh:mm:ss)
-            row['UTC Date'] = row['UTC Date'].split("-").reverse().join("-");
+            const length = Math.max(...data.features.map(f => f.properties.Date_Time.length));
+            document.getElementById("slider").max = length - 1; // -1 to avoid arrow head issue
+            filterBy(0);
+        });
 
-            container[row.Name2].geometry.coordinates.push([ row.Longitude, row.Latitude ]);
-            container[row.Name2].properties.Name.push(row.Name);
-            container[row.Name2].properties.Date_Time.push(`${row['UTC Date']}T${row['UTC Time']}.000Z`);
-            container[row.Name2].properties.Speed.push(row.Speed);
-            container[row.Name2].properties.Course.push(row.Course);
-            container[row.Name2].properties.Sats.push(row.Sats);
-            container[row.Name2].properties.HDOP.push(row.HDOP);
-            container[row.Name2].properties.CellId.push(row.CellID);
-            container[row.Name2].properties.TA.push(row.TA);
-            container[row.Name2].properties.PL.push(row.PL);
-            container[row.Name2].properties.M.push(row.M);
-            container[row.Name2].properties.IntPwr.push(row.IntPwr);
-            container[row.Name2].properties.ACC.push(row.ACC);
-            container[row.Name2].properties.Temp.push(row.Temp);
-            container[row.Name2].properties.Charging.push(row.Charging);
-            container[row.Name2].properties.RSSI.push(row.RSSI);
-            container[row.Name2].properties.Mode.push(row.Mode);
-            container[row.Name2].properties.CAP.push(row.CAP);
+
+        function createArrow(start, end, headLength = 0.0001, headAngle = Math.PI / 8) {
+            const dx = end[0] - start[0];
+            const dy = end[1] - start[1];
+            const angle = Math.atan2(dy, dx);
+
+            const leftX = end[0] - headLength * Math.cos(angle - headAngle);
+            const leftY = end[1] - headLength * Math.sin(angle - headAngle);
+
+            const rightX = end[0] - headLength * Math.cos(angle + headAngle);
+            const rightY = end[1] - headLength * Math.sin(angle + headAngle);
+
+            return [[leftX, leftY], [rightX, rightY]];
         }
 
-        console.log("----- Start My Data: ");
-        console.log(container);
-        console.log("----- End My Data: ");
+        function filterBy(datetime_index) {
+            // Set the label to the datetime value
+            let datetime = new Date(data.features[0].properties.Date_Time[datetime_index]);
 
-        for(const c in container) {
-            data.features.push(container[c]);
-            const sourceId = `sourceId_${c}`;
-            const layerId = `layerId_${c}`;
+            document.getElementById('time').textContent = `${datetime.toUTCString()}`;
+            const index = data.features[0].properties.Date_Time.findIndex((b) => b === data.features[0].properties.Date_Time[datetime_index]);
 
-            createCheckboxes(sourceId, layerId, container[c].properties.Name2);
+            for (let i = 0; i < data.features.length; i++) {
 
-            const randomColor = "#000000".replace(/0/g,function() {
-                return (~~(Math.random()*16)).toString(16);
-            });
+                const checkboxValue = document.getElementById(`sourceId_${data.features[i].properties.Name2}_checkbox`).checked;
 
-            map.addSource(sourceId, {type: 'geojson', data: container[c]});
-            map.addLayer({
-                'id': layerId,
-                'type': 'line',
-                'source': sourceId,
-                'layout': {
-                    'line-cap': 'round'
-                },
-                'paint': {
-                    'line-color': randomColor,
-                    'line-opacity': 1,
-                    'line-width': 4,
+                if (!checkboxValue) {
+                    continue;
                 }
-            });
+
+                const coordinatesArray = data.features[i].geometry.coordinates;
+                const arrowHeadLines = createArrow(coordinatesArray[index], coordinatesArray[index + 1]);
+                map.getSource(`sourceId_${data.features[i].properties.Name2}`).setData({
+                    "type": "FeatureCollection",
+                    "features": [
+                        {
+                            "type": "Feature",
+                            "geometry": {
+                                "type": "LineString",
+                                "coordinates": [
+                                    coordinatesArray[index],
+                                    // coordinatesArray[index + 1],
+                                ]
+                            }
+                        },
+                        {
+                            "type": "Feature",
+                            "geometry": {
+                                "type": "LineString",
+                                "coordinates": [
+                                    coordinatesArray[index + 1],
+                                    arrowHeadLines[0]
+                                ]
+                            }
+                        },
+                        {
+                            "type": "Feature",
+                            "geometry": {
+                                "type": "LineString",
+                                "coordinates": [
+                                    coordinatesArray[index + 1],
+                                    arrowHeadLines[1]
+                                ]
+                            }
+                        },
+                    ]
+                });
+            }
         }
-
-        document.getElementById("slider").max = data.features[0].properties.Date_Time.length - 1;
-
-        filterBy(0);
 
         const slider = document.getElementById('slider');
+
         let current = 0;
         let timer = null;
         let isPlaying = false;
@@ -417,6 +311,11 @@
 
             timer = window.setInterval(() => {
                 slider.value = current;
+                
+                slider.addEventListener('change', (e) => {
+                    current = e.target.value;
+                });
+
                 slider.dispatchEvent(new Event('input'));
                 current++;
                 if (current > maxIndex) {
@@ -439,23 +338,17 @@
                 pause();
                 button.textContent = "Play Animation";
             } else {
-                stopAnimation = sliderAnimation(slider, parseInt(slider.max, 10), 500);
+                stopAnimation = sliderAnimation(slider, parseInt(slider.max, 10), 300);
                 button.textContent = "Pause Animation";
             }
         }
 
         document.getElementById('play_pause_button').addEventListener('click', togglePlayPause);
 
-        slider
-            .addEventListener('input', (e) => {
-                const timestamp = parseInt(e.target.value, 10);
-                // console.log("Slider timestamp: " + e.target.value);
-
-                filterBy(timestamp);
-                // sliderAnimation(timestamp);
-            });
-
-        map.jumpTo({'center': data.features[0].geometry.coordinates[0], 'zoom': 14});
+        slider.addEventListener('input', (e) => {
+            const timestamp = parseInt(e.target.value, 10);
+            filterBy(timestamp);
+        });
     });
 </script>
 </body>
