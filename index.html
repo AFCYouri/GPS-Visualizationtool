@@ -50,26 +50,25 @@
     }
 </style>
 <div id="map"></div>
-<!-- border rounded-lg bg-gray-50 -->
 <div class="map-overlay top">
-  <div id="map-overlay-inner-id" class="map-overlay-inner flex flex-row gap-3 p-4 border rounded-lg bg-gray-50">
-    <h2 class="text-lg font-bold">Timestamps & Coordinates</h2>
+    <div id="map-overlay-inner-id" class="map-overlay-inner flex flex-row gap-3 p-4 border rounded-lg bg-gray-50">
+        <h2 class="text-lg font-bold">Timestamps & Coordinates</h2>
 
-    <label id="time" for="slider" class="text-center block w-full text-sm font-medium text-gray-700"></label>
+        <label id="time" for="slider" class="text-center block w-full text-sm font-medium text-gray-700"></label>
 
-    <input id="slider" type="range" min="0" max="" step="1" value="0" class="w-full cursor-pointer" autocomplete="off"/>
+        <input id="slider" type="range" min="0" max="" step="1" value="0" class="w-full cursor-pointer" autocomplete="off"/>
 
-    <button id="play_pause_button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded shadow">
-      Play Animation
-    </button>
+        <button id="play_pause_button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded shadow">
+            Play Animation
+        </button>
 
-    <label for="uploadFiles" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded shadow cursor-pointer">
-      Upload CSV File(s)
-    </label>
-    <input type="file" id="uploadFiles" accept=".csv" multiple class="hidden" />
-  </div>
+        <label for="uploadFiles" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded shadow cursor-pointer">
+            Upload CSV File(s)
+        </label>
+        <input type="file" id="uploadFiles" accept=".csv" multiple class="hidden" />
+    </div>
 
-  <div id="vessel_controls" class="space-y-2 mt-4"></div>
+    <div id="vessel_controls" class="space-y-2 mt-4"></div>
 </div>
 
 <script src="https://d3js.org/d3.v7.min.js" charset="utf-8"></script>
@@ -93,6 +92,9 @@
                 <input type="checkbox" class="w-4 h-4 text-blue-600 flex-none" id="${sourceId}_checkbox" checked>
                 <span class="text-sm flex-none">Show</span>
             </label>
+            <button id="${sourceId}_pan_button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded shadow">
+                Pan To
+            </button>
             <input type="color" id="${sourceId}_colorpicker" class="w-10 h-10 p-1 border rounded cursor-pointer flex-none" value="#000000"></input>
         `;
         container.appendChild(row);
@@ -110,45 +112,6 @@
         });
     }
 
-    function createCheckboxes(sourceId, layerId, file_name) {
-        const container = document.getElementById('map-overlay-inner-id');
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.id = `${sourceId}_checkbox`;
-        checkbox.checked = true;
-
-        const label = document.createElement('label');
-        label.htmlFor = `${sourceId}_checkbox`;
-        label.textContent = file_name;
-
-        container.appendChild(checkbox);
-        container.appendChild(label);
-
-        checkbox.addEventListener('change', (e) => {
-            if (e.target.checked) {
-                map.setLayoutProperty(layerId, 'visibility', 'visible');
-            } else {
-                map.setLayoutProperty(layerId, 'visibility', 'none');
-            }
-        });
-    }
-
-    function createColorPicker(sourceId, layerId) {
-        const container = document.getElementById('map-overlay-inner-id');
-        const colorPicker = document.createElement('input');
-        colorPicker.type = 'color';
-        colorPicker.id = `${sourceId}_colorpicker`;
-        colorPicker.value = "#000000";
-
-        container.appendChild(colorPicker);
-
-        colorPicker.addEventListener('change', (e) => {
-            map.setPaintProperty(layerId, 'line-color', e.target.value);
-        });
-    }
-
-    let csvData = [];
-
     const data = { 
         "type": "FeatureCollection",
         "features": [
@@ -156,6 +119,7 @@
     };
 
     map.on('load', () => {
+        let features_index = 0;
         
         uploadFiles.addEventListener('change', async (event) => {
             
@@ -253,17 +217,21 @@
                 });
 
                 createVesselControls(sourceId, layerId, file.name);
-                // createCheckboxes(sourceId, layerId, name2);
-                // createColorPicker(sourceId, layerId);
             }
 
             map.jumpTo({'center': data.features[0].geometry.coordinates[0], 'zoom': 16});
 
             const length = Math.max(...data.features.map(f => f.properties.Date_Time.length));
             document.getElementById("slider").max = length - 1; // -1 to avoid arrow head issue
-            filterBy(0);
-        });
 
+            for (const feature of data.features) {
+                if (length == feature.properties.Date_Time.length) {
+                    features_index = data.features.indexOf(feature);
+                }
+            }
+
+            filterBy(0, features_index);
+        });
 
         function createArrow(start, end, headLength = 0.0001, headAngle = Math.PI / 8) {
             const dx = end[0] - start[0];
@@ -279,12 +247,12 @@
             return [[leftX, leftY], [rightX, rightY]];
         }
 
-        function filterBy(datetime_index) {
+        function filterBy(slider_index, features_index) {
             // Set the label to the datetime value
-            let datetime = new Date(data.features[0].properties.Date_Time[datetime_index]);
+            let datetime = new Date(data.features[features_index].properties.Date_Time[slider_index]);
 
             document.getElementById('time').textContent = `${datetime.toUTCString()}`;
-            const index = data.features[0].properties.Date_Time.findIndex((b) => b === data.features[0].properties.Date_Time[datetime_index]);
+            const index = data.features[features_index].properties.Date_Time.findIndex((b) => b === data.features[features_index].properties.Date_Time[slider_index]);
 
             for (let i = 0; i < data.features.length; i++) {
 
@@ -304,6 +272,13 @@
                 const totalSegments = 10;
                 const startIndex = Math.max(0, index - totalSegments);
                 const segmentCoordinates = coordinatesArray.slice(startIndex, index + 1);
+
+                // console.log(`Segment coordinates for ${data.features[i].properties.Name2} at index ${datetime_index}:`, segmentCoordinates);
+
+                const button = document.getElementById(`sourceId_${data.features[i].properties.Name2}_pan_button`);
+                button.addEventListener('click', () => {
+                    map.flyTo({center: coordinatesArray[index], zoom: 17.5});
+                });
 
                 map.getSource(`sourceId_${data.features[i].properties.Name2}`).setData({
                     "type": "FeatureCollection",
@@ -390,7 +365,7 @@
 
         slider.addEventListener('input', (e) => {
             const timestamp = parseInt(e.target.value, 10);
-            filterBy(timestamp);
+            filterBy(timestamp, features_index);
         });
     });
 </script>
