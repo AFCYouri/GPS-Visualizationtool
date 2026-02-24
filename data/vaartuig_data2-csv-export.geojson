@@ -1,9 +1,0 @@
-{
-"type": "FeatureCollection",
-"name": "vaartuig_data2-csv-export",
-"features": [
-{ "type": "Feature", "properties": { "Lat": 52.47, "Lon": 5.224, "Id": "1", "Name": "eilboot", "Color": "ZEILBOOT", "icon": "bar", "time": "15-12-2025 14:26" }, "geometry": { "type": "Point", "coordinates": [ 5.224, 52.47 ] } },
-{ "type": "Feature", "properties": { "Lat": 51.816, "Lon": 5.342, "Id": "2", "Name": "RHIB", "Color": "Black", "icon": "bar", "time": "15-12-2025 14:26" }, "geometry": { "type": "Point", "coordinates": [ 5.342, 51.816 ] } },
-{ "type": "Feature", "properties": { "Lat": 51.884, "Lon": 3.674, "Id": "3", "Name": "Waterscooter", "Color": "Red", "icon": "bar", "time": "15-12-2025 14:26" }, "geometry": { "type": "Point", "coordinates": [ 3.674, 51.884 ] } }
-]
-}
