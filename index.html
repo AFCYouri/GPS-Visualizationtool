@@ -43,15 +43,19 @@
                 width: 100%;
                 cursor: ew-resize;
             }
-            .maplibregl-popup {
-                max-width: 400px;
-                font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
+
+            .marker {
+                background-image: url('/icons/deck-boat-svg.svg');
+                background-size: cover;
+                width: 30px;
+                height: 30px;
+                cursor: pointer;
             }
         </style>
 
         <div id="map"></div>
-        <div class="absolute top-0 left-0 w-full items-center gap-3 p-4 ">
-            <div class="map-overlay-inner max-w-1/4 flex flex-row items-center place-content-between gap-3 p-4 mb-1 border rounded-lg bg-gray-50">
+        <div class="absolute top-0 left-0 w-2/5 items-center gap-3 p-2 ">
+            <div class="map-overlay-inner max-w-full flex flex-row items-center place-content-between gap-3 p-4 mb-1 border rounded-lg bg-gray-50">
                 <h2 class="text-lg font-bold">Visualize Vessel GPS Data</h2>
                 <label for="uploadFiles" class="px-4 py-3 bg-blue-950 hover:bg-blue-800 text-white rounded shadow cursor-pointer">
                     Open CSV File(s)
@@ -59,10 +63,10 @@
                 <input type="file" id="uploadFiles" accept=".csv" multiple class="hidden" />
             </div>
 
-            <div id="vessel_controls" class="max-w-1/3 space-y-1"></div>
+            <div id="vessel_controls" class="max-w-full space-y-1"></div>
         </div>
 
-        <div id="map-overlay-bottom" class="absolute bottom-0 left-0 w-full items-center gap-3 p-4 pb-10 hidden">
+        <div id="map-overlay-bottom" class="absolute bottom-0 left-0 w-full items-center gap-3 p-2 hidden">
             <div class="map-overlay-inner flex flex-row items-center gap-3 p-4 border rounded-lg bg-gray-50">
                 <div class="grid w-1/6 gap-0">
                     <label class="text-lg font-bold">Date & Time</label>
@@ -85,12 +89,10 @@
                 zoom: 0
             });
 
-            function createVesselControls(sourceId, layerId, file_name) {
+            function createVesselControls(sourceId, layerId, markerId, file_name) {
                 const container = document.getElementById('vessel_controls');
                 const row = document.createElement('div');
                 row.className = 'flex items-center gap-4 p-2 border rounded bg-white shadow';
-                
-                // overflow-hidden text-ellipsis
                 row.innerHTML = `
                     <span class="text-sm font-medium flex-1 wrap-anywhere">${file_name}</span>
                     <label class="flex items-center gap-2 flex-none">
@@ -100,19 +102,28 @@
                     <button id="${sourceId}_fly_to_button" class="px-4 py-2 bg-blue-950 hover:bg-blue-800 text-white rounded shadow flex-none cursor-pointer">
                         Fly To
                     </button>
+                    <select name="icons" id="${sourceId}_icons_list" class="w-32 h-10 p-1 border rounded cursor-pointer flex-none">
+                        <option value="deck-boat">Deck Boat</option>
+                        <option value="sail-boat">Sail Boat</option>
+                        <option value="rhib">RHIB</option>
+                        <option value="jet-ski">Jet Ski</option>
+                    </select>
                     <input type="color" id="${sourceId}_colorpicker" class="w-10 h-10 p-1 border rounded cursor-pointer flex-none""></input>
                 `;
                 container.appendChild(row);
                 
                 document.getElementById(`${sourceId}_checkbox`).addEventListener('change', (e) => {
                     if (e.target.checked) {
+                        document.getElementById(markerId).style.display = 'block';
                         map.setLayoutProperty(layerId, 'visibility', 'visible');
                     } else {
+                        document.getElementById(markerId).style.display = 'none';
                         map.setLayoutProperty(layerId, 'visibility', 'none');
                     }
                 });
 
                 document.getElementById(`${sourceId}_colorpicker`).addEventListener('change', (e) => {
+                    // document.getElementById(markerId).style.fill = e.target.value;
                     map.setPaintProperty(layerId, 'line-color', e.target.value);
                 });
             }
@@ -125,6 +136,7 @@
 
             map.on('load', () => {
                 let features_index = 0;
+                let markers = [];
                 
                 uploadFiles.addEventListener('change', async (event) => {
                     
@@ -217,12 +229,21 @@
                                 'line-cap': 'round'
                             },
                             'paint': {
-                                'line-opacity': 1,
-                                'line-width': 7,
+                                'line-opacity': 0.75,
+                                'line-width': 5,
                             }
                         });
 
-                        createVesselControls(sourceId, layerId, file.name);
+                        const el = document.createElement('div');
+                        el.id = `marker_${name2}`;
+                        el.className = 'marker';
+
+                        marker = new maplibregl.Marker({element: el})
+                            .setLngLat(feature.geometry.coordinates[0])
+                            .addTo(map);
+                        markers.push(marker);
+
+                        createVesselControls(sourceId, layerId, `marker_${name2}`, file.name);
                     }
 
                     map.jumpTo({'center': data.features[0].geometry.coordinates[0], 'zoom': 16});
@@ -238,7 +259,7 @@
 
                     document.getElementById('map-overlay-bottom').classList.remove('hidden');
 
-                    filterBy(0, features_index);
+                    filterBy(0, features_index, markers);
                 });
 
                 function createArrow(start, end, headLength = 0.0001, headAngle = Math.PI / 8) {
@@ -255,7 +276,7 @@
                     return [[leftX, leftY], [rightX, rightY]];
                 }
 
-                function filterBy(slider_index, features_index) {
+                function filterBy(slider_index, features_index, markers) {
                     // Set the label to the datetime value
                     let datetime = new Date(data.features[features_index].properties.Date_Time[slider_index]);
 
@@ -281,43 +302,33 @@
                         const startIndex = Math.max(0, index - totalSegments);
                         const segmentCoordinates = coordinatesArray.slice(startIndex, index + 1);
 
-                        console.log(`Segment coordinates for ${data.features[i].properties.Name2}:`, segmentCoordinates);
-
                         const button = document.getElementById(`sourceId_${data.features[i].properties.Name2}_fly_to_button`);
                         button.addEventListener('click', () => {
-                            map.flyTo({center: coordinatesArray[index], zoom: 17.5});
+                            map.flyTo({center: coordinatesArray[index], zoom: 18});
                         });
 
-                        layerId = `layerId_${data.features[i].properties.Name2}`;
-                        map.on('click', layerId, (e) => {
-                            const coordinates = segmentCoordinates[0].slice();
-                            const speed = data.features[i].properties.Speed[index];
-                            const course = data.features[i].properties.Course[index];
-
-                            console.log(`Clicked feature properties for ${data.features[i].properties.Name2} with speed: ${speed} and course: ${course}`);
-
-                            // console.log(JSON.stringify(e.features[i].properties));
-
-                            // Ensure that if the map is zoomed out such that multiple
-                            // copies of the feature are visible, the popup appears
-                            // over the copy being pointed to.
-                            while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) {
-                                coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
-                            }
-
-                            new maplibregl.Popup()
-                                .setLngLat(coordinates)
-                                .setHTML(speed && course ? `<strong>${feature.properties.Filename}</strong><br><strong>Speed:</strong> ${speed} knots<br><strong>Course:</strong> ${course}°` : `<strong>No speed or course data available</strong>`)
-                                .addTo(map);
+                        const change_icon_list = document.getElementById(`sourceId_${data.features[i].properties.Name2}_icons_list`);
+                        change_icon_list.addEventListener('change', (e) => {
+                            const selectedIcon = e.target.value;
+                            const markerElement = document.getElementById(`marker_${data.features[i].properties.Name2}`);
+                            markerElement.style.backgroundImage = `url('/icons/${selectedIcon}-svg.svg')`;
                         });
 
-                        map.on('mouseenter', layerId, () => {
-                            map.getCanvas().style.cursor = 'pointer';
-                        });
+                        const speed = data.features[i].properties.Speed[index];
+                        const course = data.features[i].properties.Course[index];
 
-                        map.on('mouseleave', layerId, () => {
-                            map.getCanvas().style.cursor = '';
-                        });
+                        const popup = new maplibregl.Popup({
+                            closeButton: false,
+                            offset: 15,
+                        }).setHTML(speed && course ? `<strong class="wrap-anywhere">${data.features[i].properties.Filename}</strong><br>
+                                                        <strong>Speed:</strong> ${speed} knots<br>
+                                                        <strong>Course:</strong> ${course}°` : 
+                                                        `<strong>No speed or course data available</strong>`)
+
+                        markers[i]
+                            .setLngLat(coordinatesArray[index])
+                            .setPopup(popup)
+                            .addTo(map);
 
                         map.getSource(`sourceId_${data.features[i].properties.Name2}`).setData({
                             "type": "FeatureCollection",
@@ -328,26 +339,6 @@
                                         "type": "LineString",
                                         "coordinates":
                                             segmentCoordinates,
-                                    },
-                                },
-                                {
-                                    "type": "Feature",
-                                    "geometry": {
-                                        "type": "LineString",
-                                        "coordinates": [
-                                            coordinatesArray[index + 1],
-                                            arrowHeadLines[0]
-                                        ]
-                                    },
-                                },
-                                {
-                                    "type": "Feature",
-                                    "geometry": {
-                                        "type": "LineString",
-                                        "coordinates": [
-                                            coordinatesArray[index + 1],
-                                            arrowHeadLines[1]
-                                        ]
                                     },
                                 },
                             ]
@@ -404,7 +395,7 @@
 
                 slider.addEventListener('input', (e) => {
                     const timestamp = parseInt(e.target.value, 10);
-                    filterBy(timestamp, features_index);
+                    filterBy(timestamp, features_index, markers);
                 });
             });
         </script>
