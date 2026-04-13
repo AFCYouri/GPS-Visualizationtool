@@ -7,6 +7,8 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <link rel='stylesheet' href='https://unpkg.com/maplibre-gl@5.14.0/dist/maplibre-gl.css' />
         <script src='https://unpkg.com/maplibre-gl@5.16.0/dist/maplibre-gl.js'></script>
+        <script src="https://d3js.org/d3.v7.min.js" charset="utf-8"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
         <style>
             body { margin: 0; padding: 0; }
             html, body, #map { height: 100%; }
@@ -45,7 +47,7 @@
             }
 
             .marker {
-                background-image: url('/icons/deck-boat-svg.svg');
+                background-image: url('/icons/boat-svg.svg');
                 background-size: cover;
                 width: 30px;
                 height: 30px;
@@ -79,9 +81,6 @@
             </div>
         </div>
 
-        <script src="https://d3js.org/d3.v7.min.js" charset="utf-8"></script>
-        <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-
         <script>
             const map = new maplibregl.Map({
                 container: 'map',
@@ -103,7 +102,7 @@
                         Fly To
                     </button>
                     <select name="icons" id="${sourceId}_icons_list" class="w-32 h-10 p-1 border rounded cursor-pointer flex-none">
-                        <option value="deck-boat">Deck Boat</option>
+                        <option value="boat">Deck Boat</option>
                         <option value="sail-boat">Sail Boat</option>
                         <option value="rhib">RHIB</option>
                         <option value="jet-ski">Jet Ski</option>
@@ -145,11 +144,33 @@
                     for (const file of files) {
                         const text = await file.text();
                         const entries = d3.dsvFormat(`;`).parse(text);
-                        const validEntries = entries.filter(entry => entry.Latitude !== "0N" && entry.Longitude !== "0E");
 
+                        if (!entries.columns.includes("Latitude") && !entries.columns.includes("Longitude")) {
+                            window.alert(`${file.name} is missing Latitude or Longitude columns and will be skipped. 
+                                Please upload a valid CSV file with Latitude and Longitude data.`);
+                            return;
+                        }
+
+                        const regexLat = /^(-?[1-8]?\d(?:\,\d{1,18})?|90(?:\,0{1,18})?)N$/;
+                        const regexLon = /^(-?(?:1[0-7]|[1-9])?\d(?:\,\d{1,18})?|180(?:\,0{1,18})?)E$/;
+
+                        function check_lat_lon(lat, lon) {
+                            let validLat = regexLat.test(lat);
+                            let validLon = regexLon.test(lon);
+
+                            return validLat && validLon;
+                        }
+
+                        let validEntries = [];
+                        validEntries = entries.filter(entry => entry.Latitude !== "0N" && entry.Longitude !== "0E");
+
+                        if (validEntries.length > 0) {
+                            validEntries = validEntries.filter(entry => check_lat_lon(entry.Latitude, entry.Longitude));
+                        }
+                        
                         if (validEntries.length === 0) {
-                            console.log(`----- No valid data in file: ${file.name}`);
-                            continue;
+                            window.alert(`${file.name} does not contain any valid Latitude and Longitude data.`);
+                            return;
                         }
 
                         const name2 = validEntries[0].Name2 || file.name.replace('.csv', '');
@@ -185,8 +206,11 @@
                         };
                         
                         for (const row of validEntries) {
-                            // Latitude and Longitude data from CSV uses a comma (,), maplibre expects a period (.), we use the replace() function to change the comma to a period
-                            // Latitude and Longitude data from CSV adds N and E at the end, with the replace() function we remove these characters
+                            // Latitude and Longitude data from CSV uses a comma (,), 
+                            // maplibre expects a period (.), 
+                            // we use the replace() function to change the comma to a period
+                            // Latitude and Longitude data from CSV adds N and E at the end, 
+                            // with the replace() function we remove these characters
                             row.Latitude = row.Latitude.replace(/,/g, ".");
                             row.Latitude = row.Latitude.replace(/N/gi, "");
                             row.Longitude = row.Longitude.replace(/,/g, ".");
@@ -249,7 +273,7 @@
                     map.jumpTo({'center': data.features[0].geometry.coordinates[0], 'zoom': 16});
 
                     const length = Math.max(...data.features.map(f => f.properties.Date_Time.length));
-                    document.getElementById("slider").max = length - 1; // -1 to avoid arrow head issue
+                    document.getElementById("slider").max = length - 1;
 
                     for (const feature of data.features) {
                         if (length == feature.properties.Date_Time.length) {
@@ -262,26 +286,14 @@
                     filterBy(0, features_index, markers);
                 });
 
-                function createArrow(start, end, headLength = 0.0001, headAngle = Math.PI / 8) {
-                    const dx = end[0] - start[0];
-                    const dy = end[1] - start[1];
-                    const angle = Math.atan2(dy, dx);
-
-                    const leftX = end[0] - headLength * Math.cos(angle - headAngle);
-                    const leftY = end[1] - headLength * Math.sin(angle - headAngle);
-
-                    const rightX = end[0] - headLength * Math.cos(angle + headAngle);
-                    const rightY = end[1] - headLength * Math.sin(angle + headAngle);
-
-                    return [[leftX, leftY], [rightX, rightY]];
-                }
-
                 function filterBy(slider_index, features_index, markers) {
                     // Set the label to the datetime value
                     let datetime = new Date(data.features[features_index].properties.Date_Time[slider_index]);
 
                     document.getElementById('time').textContent = `${datetime.toUTCString()}`;
-                    const index = data.features[features_index].properties.Date_Time.findIndex((b) => b === data.features[features_index].properties.Date_Time[slider_index]);
+
+                    const index = data.features[features_index].properties.Date_Time.findIndex((b) => 
+                        b === data.features[features_index].properties.Date_Time[slider_index]);
 
                     for (let i = 0; i < data.features.length; i++) {
 
@@ -292,7 +304,7 @@
                         }
 
                         const coordinatesArray = data.features[i].geometry.coordinates;
-                        const arrowHeadLines = createArrow(coordinatesArray[index], coordinatesArray[index + 1]);
+                        // const arrowHeadLines = createArrow(coordinatesArray[index], coordinatesArray[index + 1]);
 
                         if (index >= coordinatesArray.length - 1) {
                             return;
