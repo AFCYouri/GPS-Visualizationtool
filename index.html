@@ -88,57 +88,20 @@
                 zoom: 0
             });
 
-            function createVesselControls(sourceId, layerId, markerId, file_name) {
-                const container = document.getElementById('vessel_controls');
-                const row = document.createElement('div');
-                row.className = 'flex items-center gap-4 p-2 border rounded bg-white shadow';
-                row.innerHTML = `
-                    <span class="text-sm font-medium flex-1 wrap-anywhere">${file_name}</span>
-                    <label class="flex items-center gap-2 flex-none">
-                        <input type="checkbox" class="w-4 h-4 text-blue-950 flex-none cursor-pointer" id="${sourceId}_checkbox" checked>
-                        <span class="text-sm flex-none">Show</span>
-                    </label>
-                    <button id="${sourceId}_fly_to_button" class="px-4 py-2 bg-blue-950 hover:bg-blue-800 text-white rounded shadow flex-none cursor-pointer">
-                        Fly To
-                    </button>
-                    <select name="icons" id="${sourceId}_icons_list" class="w-32 h-10 p-1 border rounded cursor-pointer flex-none">
-                        <option value="boat">Deck Boat</option>
-                        <option value="sail-boat">Sail Boat</option>
-                        <option value="rhib">RHIB</option>
-                        <option value="jet-ski">Jet Ski</option>
-                    </select>
-                    <input type="color" id="${sourceId}_colorpicker" class="w-10 h-10 p-1 border rounded cursor-pointer flex-none""></input>
-                `;
-                container.appendChild(row);
-                
-                document.getElementById(`${sourceId}_checkbox`).addEventListener('change', (e) => {
-                    if (e.target.checked) {
-                        document.getElementById(markerId).style.display = 'block';
-                        map.setLayoutProperty(layerId, 'visibility', 'visible');
-                    } else {
-                        document.getElementById(markerId).style.display = 'none';
-                        map.setLayoutProperty(layerId, 'visibility', 'none');
-                    }
-                });
-
-                document.getElementById(`${sourceId}_colorpicker`).addEventListener('change', (e) => {
-                    // document.getElementById(markerId).style.fill = e.target.value;
-                    map.setPaintProperty(layerId, 'line-color', e.target.value);
-                });
-            }
-
             const data = { 
                 "type": "FeatureCollection",
                 "features": [
                 ]
             };
 
+            let features_index = 0;
+            let markers = [];
+
             map.on('load', () => {
-                let features_index = 0;
-                let markers = [];
                 
+                const slider = document.getElementById('slider');
+
                 uploadFiles.addEventListener('change', async (event) => {
-                    
                     const files = event.target.files;
                     
                     for (const file of files) {
@@ -270,7 +233,7 @@
                         createVesselControls(sourceId, layerId, `marker_${name2}`, file.name);
                     }
 
-                    map.jumpTo({'center': data.features[0].geometry.coordinates[0], 'zoom': 16});
+                    map.jumpTo({'center': data.features[0].geometry.coordinates[slider.value], 'zoom': 16});
 
                     const length = Math.max(...data.features.map(f => f.properties.Date_Time.length));
                     document.getElementById("slider").max = length - 1;
@@ -282,9 +245,65 @@
                     }
 
                     document.getElementById('map-overlay-bottom').classList.remove('hidden');
-
-                    filterBy(0, features_index, markers);
+                    
+                    filterBy(slider.value, features_index, markers);
                 });
+
+                function createVesselControls(sourceId, layerId, markerId, file_name) {
+                    const container = document.getElementById('vessel_controls');
+                    const row = document.createElement('div');
+                    row.id = `control_${sourceId}`;
+                    row.className = 'flex items-center gap-4 p-2 border rounded bg-white shadow';
+                    row.innerHTML = `
+                        <span class="text-sm font-medium flex-1 wrap-anywhere">${file_name}</span>
+                        <label class="flex items-center gap-2 flex-none">
+                            <input type="checkbox" class="w-4 h-4 text-blue-950 flex-none cursor-pointer" id="${sourceId}_checkbox" checked>
+                            <span class="text-sm flex-none">Show</span>
+                        </label>
+                        <button id="${sourceId}_fly_to_button" class="px-4 py-2 bg-blue-950 hover:bg-blue-800 text-white rounded shadow flex-none cursor-pointer">
+                            Fly To
+                        </button>
+                        <select name="icons" id="${sourceId}_icons_list" class="w-32 h-10 p-1 border rounded cursor-pointer flex-none">
+                            <option value="boat">Deck Boat</option>
+                            <option value="sail-boat">Sail Boat</option>
+                            <option value="rhib">RHIB</option>
+                            <option value="jet-ski">Jet Ski</option>
+                        </select>
+                        <input type="color" id="${sourceId}_colorpicker" class="w-10 h-10 p-1 border rounded cursor-pointer flex-none""></input>
+                        <button id="${sourceId}_delete_button" class="px-1 py-2 flex-none cursor-pointer">
+                            <img src="/icons/delete.png" alt="Delete" class="w-8 h-8">
+                        </button>
+                    `;
+                    container.appendChild(row);
+                    
+                    document.getElementById(`${sourceId}_checkbox`).addEventListener('change', (e) => {
+                        if (e.target.checked) {
+                            document.getElementById(markerId).style.display = 'block';
+                            map.setLayoutProperty(layerId, 'visibility', 'visible');
+                        } else {
+                            document.getElementById(markerId).style.display = 'none';
+                            map.setLayoutProperty(layerId, 'visibility', 'none');
+                        }
+                    });
+
+                    document.getElementById(`${sourceId}_colorpicker`).addEventListener('change', (e) => {
+                        map.setPaintProperty(layerId, 'line-color', e.target.value);
+                    });
+
+                    document.getElementById(`${sourceId}_delete_button`).addEventListener('click', (e) => {
+                        const index = data.features.findIndex(feature => feature.properties.Filename === file_name);
+
+                        map.removeLayer(layerId);
+                        map.removeSource(sourceId);
+                        document.getElementById(markerId).remove();
+                        row.remove();
+                        
+                        markers.splice(index, 1);
+                        data.features.splice(index, 1);
+
+                        features_index = 0;
+                    });
+                }
 
                 function filterBy(slider_index, features_index, markers) {
                     // Set the label to the datetime value
@@ -304,7 +323,6 @@
                         }
 
                         const coordinatesArray = data.features[i].geometry.coordinates;
-                        // const arrowHeadLines = createArrow(coordinatesArray[index], coordinatesArray[index + 1]);
 
                         if (index >= coordinatesArray.length - 1) {
                             return;
@@ -358,7 +376,6 @@
                     }
                 }
 
-                const slider = document.getElementById('slider');
                 slider.addEventListener('change', (e) => {
                     current = e.target.value;
                 });
@@ -406,7 +423,7 @@
                 document.getElementById('play_pause_button').addEventListener('click', togglePlayPause);
 
                 slider.addEventListener('input', (e) => {
-                    const timestamp = parseInt(e.target.value, 10);
+                    let timestamp = parseInt(e.target.value, 10);
                     filterBy(timestamp, features_index, markers);
                 });
             });
