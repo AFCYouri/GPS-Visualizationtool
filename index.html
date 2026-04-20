@@ -217,7 +217,7 @@
                                 'line-cap': 'round'
                             },
                             'paint': {
-                                'line-opacity': 0.75,
+                                'line-opacity': 1,
                                 'line-width': 5,
                             }
                         });
@@ -329,7 +329,7 @@
                             return;
                         }
 
-                        const totalSegments = 10;
+                        const totalSegments = 20;
                         const startIndex = Math.max(0, index - totalSegments);
                         const segmentCoordinates = coordinatesArray.slice(startIndex, index + 1);
 
