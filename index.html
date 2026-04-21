@@ -265,10 +265,12 @@
                             Fly To
                         </button>
                         <select name="icons" id="${sourceId}_icons_list" class="w-32 h-10 p-1 border rounded cursor-pointer flex-none">
-                            <option value="boat">Deck Boat</option>
-                            <option value="sail-boat">Sail Boat</option>
+                            <option value="patrol-vessel">Patrol Vessel</option>
+                            <option value="sailing-boat">Sailing Boat</option>
                             <option value="rhib">RHIB</option>
-                            <option value="jet-ski">Jet Ski</option>
+                            <option value="jet-ski">Waterscooter</option>
+                            <option value="cargo-ship">Cargo Ship</option>
+                            <option value="fishing-ship">Fishing Ship</option>
                         </select>
                         <input type="color" id="${sourceId}_colorpicker" class="w-10 h-10 p-1 border rounded cursor-pointer flex-none""></input>
                         <button id="${sourceId}_delete_button" class="px-1 py-2 flex-none cursor-pointer">
@@ -416,7 +418,7 @@
                         pause();
                         button.textContent = "Play Scenario";
                     } else {
-                        stopAnimation = sliderAnimation(slider, parseInt(slider.max, 10), 300);
+                        stopAnimation = sliderAnimation(slider, parseInt(slider.max, 10), 50);
                         button.textContent = "Pause Scenario";
                     }
                 }
