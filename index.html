@@ -110,8 +110,7 @@
                         const entries = d3.dsvFormat(`;`).parse(text);
 
                         if (!entries.columns.includes("Latitude") && !entries.columns.includes("Longitude")) {
-                            window.alert(`${file.name} is missing Latitude or Longitude columns and will be skipped. 
-                                Please upload a valid CSV file with Latitude and Longitude data.`);
+                            window.alert(`${file.name} is missing Latitude or Longitude columns and will be skipped.\nPlease upload a valid CSV file with Latitude and Longitude data.`);
                             return;
                         }
 
